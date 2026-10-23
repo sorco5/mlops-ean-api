@@ -1,0 +1,13 @@
+HOJA DE VALORES · DESPLIEGUE MLOPS
+Usuario:                 
+ACR:                     acrmlopsean<usuario>
+Storage:                 stmlopsean<usuario>
+Región:                  
+Subscription ID:         
+URL del endpoint:        
+Token Databricks:        (SECRETO)
+LA customerId:           
+LA clave:                (SECRETO)
+URL de la página:        
+AZURE_CREDENTIALS:       (SECRETO, JSON de 4 campos)
+URL de la API:           
