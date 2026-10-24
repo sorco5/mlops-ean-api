@@ -4,6 +4,10 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -25,13 +29,15 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
-        tags: acrmlopseansorco5.azurecr.io/ml-api:latest
+        tags: acrmlopseansorco5.azurecr.io/ml-api:${{ github.sha }}
 
-    # 4. Login a Azure con el Service Principal
+    # 4. Login a Azure con identidad administrada (OIDC, sin contraseñas)
     - name: Login to Azure
-      uses: azure/login@v1
+      uses: azure/login@v2
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
     # 5. Desplegar en Container Apps
     #    DATABRICKS_URL   → URL del endpoint MLOPS_EAN
@@ -39,24 +45,14 @@ jobs:
     #    create = primer despliegue | update = actualizaciones posteriores
     - name: Deploy to Container Apps
       run: |
-        az containerapp create \
+        az containerapp secret set \
           --name api-mlops-ean \
           --resource-group rg-mlops-ean \
-          --environment env-mlops-ean \
-          --image acrmlopseansorco5.azurecr.io/ml-api:latest \
-          --registry-server acrmlopseansorco5.azurecr.io \
-          --registry-username ${{ secrets.ACR_USERNAME }} \
-          --registry-password ${{ secrets.ACR_PASSWORD }} \
-          --target-port 8000 \
-          --ingress external \
-          --min-replicas 1 \
-          --env-vars \
-            DATABRICKS_URL=${{ secrets.DATABRICKS_URL }} \
-            DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }} || \
+          --secrets dbtoken="${{ secrets.DATABRICKS_TOKEN }}"
         az containerapp update \
           --name api-mlops-ean \
           --resource-group rg-mlops-ean \
-          --image acrmlopseansorco5.azurecr.io/ml-api:latest \
+          --image acrmlopseansorco5.azurecr.io/ml-api:${{ github.sha }} \
           --set-env-vars \
-            DATABRICKS_URL=${{ secrets.DATABRICKS_URL }} \
-            DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }}
+            DATABRICKS_URL="${{ secrets.DATABRICKS_URL }}" \
+            DATABRICKS_TOKEN=secretref:dbtoken
