@@ -4,10 +4,6 @@ on:
   push:
     branches: [ main ]
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -29,15 +25,13 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         push: true
-        tags: acrmlopseansorco5.azurecr.io/ml-api:${{ github.sha }}
+        tags: acrmlopseansorco5.azurecr.io/ml-api:latest
 
-    # 4. Login a Azure con identidad administrada (OIDC, sin contraseñas)
+    # 4. Login a Azure con el Service Principal
     - name: Login to Azure
-      uses: azure/login@v2
+      uses: azure/login@v1
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
 
     # 5. Desplegar en Container Apps
     #    DATABRICKS_URL   → URL del endpoint MLOPS_EAN
@@ -45,14 +39,24 @@ jobs:
     #    create = primer despliegue | update = actualizaciones posteriores
     - name: Deploy to Container Apps
       run: |
-        az containerapp secret set \
+        az containerapp create \
           --name api-mlops-ean \
           --resource-group rg-mlops-ean \
-          --secrets dbtoken="${{ secrets.DATABRICKS_TOKEN }}"
+          --environment env-mlops-ean \
+          --image acrmlopseansorco5.azurecr.io/ml-api:latest \
+          --registry-server acrmlopseansorco5.azurecr.io \
+          --registry-username ${{ secrets.ACR_USERNAME }} \
+          --registry-password ${{ secrets.ACR_PASSWORD }} \
+          --target-port 8000 \
+          --ingress external \
+          --min-replicas 1 \
+          --env-vars \
+            DATABRICKS_URL=${{ secrets.DATABRICKS_URL }} \
+            DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }} || \
         az containerapp update \
           --name api-mlops-ean \
           --resource-group rg-mlops-ean \
-          --image acrmlopseansorco5.azurecr.io/ml-api:${{ github.sha }} \
+          --image acrmlopseansorco5.azurecr.io/ml-api:latest \
           --set-env-vars \
-            DATABRICKS_URL="${{ secrets.DATABRICKS_URL }}" \
-            DATABRICKS_TOKEN=secretref:dbtoken
+            DATABRICKS_URL=${{ secrets.DATABRICKS_URL }} \
+            DATABRICKS_TOKEN=${{ secrets.DATABRICKS_TOKEN }}
